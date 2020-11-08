@@ -2,12 +2,30 @@
 
     <div class="app">
         <div class="dialog" v-show="showDialog">
-            <label>
-                添加新的日程
-                <input type="text">
-            </label>
 
-            <button class="confirm_btn" @click="showDialog=false">确认</button>
+
+            <div class="dialog_title">
+                <span>{{getDialogTitle}}</span>
+            </div>
+
+
+            <div class="dialog_content">
+                <div class="form_group">
+                    <input type="text" placeholder="请输入日程标题" v-model="title" v-on:keyup="inputCheck">
+                     <span v-if="showErrorMsg" class="errorMsg">请输入标题</span>
+                </div>
+
+                <div>
+                    <span>{{current_date}}</span>
+                </div>
+            </div>
+
+
+            <div class="dialog_footer">
+                <button class="delete_btn" @click="deleteSchedule()">删除</button>
+                <button class="confirm_btn" @click="confirmSchedule()">确认</button>
+            </div>
+
         </div>
 
         <div :class="showDialog?'cal_container showDialog':'cal_container'">
@@ -65,7 +83,11 @@
                             </div>
 
                             <div class="cal_body_schedule">
-                                <button v-if="days[(i-1)*7+j-1].isChosen" v-on:click.stop="showDialogView(i,j)">添加日程标题</button>
+                                <button v-if="!days[(i-1)*7+j-1].hasTitle && days[(i-1)*7+j-1].isChosen" v-on:click.stop="showDialogView(i,j)" class="add_schedule_btn">
+                                    {{days[(i-1)*7+j-1].title}}
+                                </button>
+
+                                <span v-if="days[(i-1)*7+j-1].hasTitle" class="schedule_span" v-on:click.stop="showDialogView(i,j)">{{days[(i-1)*7+j-1].title}}</span>
                             </div>
                         </div>
                     </div>
@@ -88,7 +110,15 @@
                 days: [],
                 rows: 0,
                 nowMonth: '',
-                showDialog: false
+                showDialog: false,
+                current_date: '',
+                current_i:'',
+                current_j:'',
+                current_title:'',
+                title:'',
+                schedule: new Map() ,
+                isChosen:new Map(),
+                showErrorMsg:false
             }
         },
         created() {
@@ -100,6 +130,22 @@
                     return this.year + ' 年  ' + this.month + ' 月'
                 }
                 return this.year + ' 年 ' + this.month + ' 月'
+            },
+            getDialogTitle(){
+
+                if(this.current_i !=='' && this.current_j !==''){
+                    let data = this.days[(this.current_i - 1) * 7 + this.current_j - 1];
+                    if(data.hasTitle){
+                        return '编辑日程标题';
+                    }else {
+                        return '添加日程标题'
+                    }
+                }else {
+                    return ''
+                }
+
+
+
             }
         },
         methods: {
@@ -125,9 +171,11 @@
                 //上个月的日子补全
                 for (let i = lastMonthDays - 1; i >= 0; i--) {
                     let data = {};
-                    data.day = preMonthDay - i;
+                    data.day = preMonthDay - i -1;
+                    data.month = this.month -1;
+                    data.year = this.year;
                     data.isToday = false;
-                    data.isChosen = false;
+                    this.fillData(data);
                     this.days.push(data)
 
                 }
@@ -135,8 +183,10 @@
                 for (let i = firstDay.getDate(); i <= lastDay.getDate(); i++) {
                     let data = {};
                     data.day = i;
+                    data.month = this.month;
+                    data.year = this.year;
                     data.isToday = this.day === i && this.month === this.nowMonth;
-                    data.isChosen = false;
+                    this.fillData(data);
                     this.days.push(data)
                 }
                 //获取下一个月的第一天
@@ -145,13 +195,16 @@
                 for (let i = 0; i < 6 - lastWeek; i++) {
                     let data = {};
                     data.day = nextMonthDay + i;
-                    data.isChosen = false;
+                    data.month = this.month + 1;
+                    data.year = this.year;
+                    this.fillData(data);
                     this.days.push(data)
                 }
 
                 this.rows = this.days.length / 7;
 
             },
+
             initNowDate() {
                 let now = new Date();
                 this.date = now;
@@ -174,14 +227,73 @@
                 this.changeDate(date)
             },
             changeChosen(i, j) {
-
-                this.days[(i - 1) * 7 + j - 1].isChosen = !this.days[(i - 1) * 7 + j - 1].isChosen;
+                let item = this.days[(i - 1) * 7 + j - 1];
+                let key = item.year + "-" + item.month + "-" + item.day;
+                if(item.isChosen){
+                    this.isChosen.delete(key)
+                }else {
+                    this.isChosen.set(key,true)
+                }
+                item.isChosen = !item.isChosen;
 
             },
-            showDialogView(i,j){
-                console.log("子元素点击了");
-                this.showDialog =true
+            showDialogView(i, j) {
+                this.showDialog = true;
+                let item = this.days[(i - 1) * 7 + j - 1];
+                this.current_date = item.year + '-' + item.month + '-' + item.day;
+                this.current_i = i;
+                this.current_j = j;
+                if(item.hasTitle){
+                    this.title = item.title;
+                }else {
+                    this.title ='';
+                }
+
+            },
+            deleteSchedule() {
+                this.showDialog = false;
+                let data = this.days[(this.current_i - 1) * 7 + this.current_j - 1];
+                let key = data.year + "-" + data.month + "-" + data.day;
+                data.title='添加日程标题';
+                data.hasTitle=false;
+                this.schedule.delete(key)
+
+            },
+            confirmSchedule(){
+                if(this.title !== ''){
+                    this.showDialog = false;
+                    let data = this.days[(this.current_i - 1) * 7 + this.current_j - 1];
+                    let key = data.year + "-" + data.month + "-" + data.day;
+                    this.schedule.set(key,{hasTitle:true,title:this.title});
+                    console.log(JSON.stringify(this.schedule.get(key)));
+                    data.title=this.schedule.get(key).title;
+                    data.hasTitle=true;
+                    this.title=''
+                }else {
+                    this.showErrorMsg =true
+                }
+            },
+            fillData(data) {
+                let key = data.year + "-" + data.month + "-" + data.day;
+                if (this.schedule.has(key)) {
+                    data.hasTitle = true;
+                    data.title = this.schedule.get(key).title;
+                } else {
+                    data.hasTitle = false;
+                    data.title = '添加日程标题';
+                }
+
+                if(this.isChosen.has(key)){
+                    data.isChosen = this.isChosen.get(key)
+                }else {
+                    data.isChosen = false;
+                }
+
+            },
+            inputCheck(){
+                    this.showErrorMsg =this.title===''
             }
+
         }
 
     }
@@ -191,6 +303,21 @@
 
     .showDialog {
         opacity: 40%;
+    }
+
+    .schedule_span{
+        color: grey;
+        background: sandybrown;
+        width: 80px;
+        text-align: center;
+    }
+
+    .add_schedule_btn{
+        background: #FCF4F2;
+        color: grey;
+        outline: none;
+
+
     }
 
     .app {
@@ -206,8 +333,81 @@
             position: absolute;
             z-index: 2;
             margin: 10px auto;
-            background: whitesmoke;
+            background: white;
             box-shadow: 2px 2px grey;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+
+            .dialog_title {
+                margin-top: 20px;
+
+                span {
+                    font-size: 18px;
+                    width: 300px;
+                }
+
+            }
+
+            .dialog_content {
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                height: 100px;
+                width: 80%;
+                margin-bottom: 20px;
+
+                input {
+                    width: 100%;
+                    padding-left: 10px;
+                    outline: none;
+                    border: 0;
+                    border-bottom: 1px solid grey;
+                }
+
+                .errorMsg{
+                    font-size: 10px;
+                    color:red;
+                    float: right;
+                    margin-top: 5px;
+                }
+            }
+
+            .dialog_footer {
+                margin-bottom: 20px;
+
+                .confirm_btn {
+                    color: #fff;
+                    background: #007AFF;
+                    border-radius: 5px;
+                    outline: none;
+                    border: 0;
+                    height: 30px;
+                    width: 50px;
+                    margin-left: 40px;
+
+                    &:hover {
+                        opacity: 80%;
+                        cursor: pointer;
+                    }
+                }
+
+                .delete_btn {
+                    color: #fff;
+                    background: crimson;
+                    border-radius: 5px;
+                    outline: none;
+                    border: 0;
+                    height: 30px;
+                    width: 50px;
+
+                    &:hover {
+                        opacity: 80%;
+                        cursor: pointer;
+                    }
+                }
+            }
         }
 
 
